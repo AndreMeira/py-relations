@@ -1,17 +1,25 @@
 from collections import namedtuple
-from typing import Iterable, Callable, Any, List, Dict
+from typing import Iterable, Callable, Any, List, Dict, Union
 
 from relations.src.collection.index import UniqueIndex, Index
 
-JoinedPair = namedtuple('JoinedPaired', ['a', 'b'])
-JoinedElementToSubset = namedtuple('JoinedElementToSubset', ['element', 'subset'])
-JoinFieldMapping = namedtuple('JoinFieldMapping', ['foreign_key', 'key'])
 JoinFactory = Callable[[Any, Any], Any]
 JoinCondition = Callable[[Any, Any], bool]
+JoinedPair = namedtuple('JoinedPaired', ['a', 'b'])
+JoinFieldMapping = namedtuple('JoinFieldMapping', ['foreign_key', 'key'])
+JoinedElementToSubset = namedtuple('JoinedElementToSubset', ['element', 'subset'])
 
+
+def _fkmap(mapping: Dict[str, str]):
+    foreignkey, key = mapping.items()[0]
+    return JoinFieldMapping(
+        key=key,
+        foreign_key=foreignkey
+    )
 
 
 class ConditionalPairing:
+
     JOIN_THROUGH = JoinedPair
 
     def __init__(
@@ -33,49 +41,82 @@ class ConditionalPairing:
     def iterate(self) -> List:
         return [(a, b) for a in self.a for b in self.b]
 
-    def join(self) -> Iterable[JoinedPair, Any]:
+    def join(self) -> Iterable[Union[JoinedPair, Any]]:
         if not self._result:
-            self._result = [
-                self.through(a, b)
-                for a, b in self.iterate()
-                if self.condition(a, b)
-            ]
+            self._result = self.make_join()
         return self._result
+
+    def make_join(self):
+        return [
+            self.through(a, b)
+            for a, b in self.iterate()
+            if self.condition(a, b)
+        ]
 
 
 class ZipPairing(ConditionalPairing):
 
-    def __init__(self, a: Iterable, b: Iterable, through: JoinFactory = None):
-        super().__init__(a, b, through, lambda a, b: True)
+    def __init__(
+        self,
+        a: Iterable,
+        b: Iterable,
+        through: JoinFactory = None
+    ):
+        a = [item for item in a]
+        b = [item for item in b]
+        super().__init__(
+            a, b,
+            through=through,
+            cond=lambda a, b: True
+        )
+
+    def get_max_length(self):
+        return min(len(self.a), len(self.b))
 
     def iterate(self) -> List:
-        b = [item for item in self.b]
-        a = [item for item in self.a]
-        maxlength = min(len(a), len(b))
+        maxlength = self.get_max_length()
 
         return [
             (item, b.index(index))
-            for index, item in enumerate(self.a[0:maxlength])
+            for index, item
+            in enumerate(self.a[0:maxlength])
         ]
 
 
 class UnrestrictedPairing(ConditionalPairing):
 
-    def __init__(self, a: Iterable, b: Iterable, through: JoinFactory = None):
-        super().__init__(a, b, through, lambda a, b: True)
+    def __init__(
+        self,
+        a: Iterable,
+        b: Iterable,
+        through: JoinFactory = None
+    ):
+        super().__init__(
+            a, b,
+            through=through
+        )
 
 
 class ElementToSubsetPairing(ConditionalPairing):
+
     JOIN_THROUGH = JoinedElementToSubset
 
     def join(self) -> Iterable[JoinedPair, Any]:
-        return self.iterate()
+        if not self._result:
+            self._result = self.iterate()
+        return self._result
 
     def iterate(self):
         return [
-            self.through(element, self.subset_of(element))
-            for element in self.a
+            self.make_result_element(el)
+            for el in self.a
         ]
+
+    def make_result_element(self, element):
+        return self.through(
+            element,
+            self.subset_of(element)
+        )
 
     def subset_of(self, element):
         return [
@@ -86,13 +127,15 @@ class ElementToSubsetPairing(ConditionalPairing):
 
 class ForeignKeyMappingPairing(ConditionalPairing):
 
-    def __init__(self, a: Iterable, b: Iterable, mapping: Dict[str, str], through: JoinFactory = None):
-        # ex: mapping = {"product_id":"id"}
-        foreignkey, key = mapping.items()[0]
-        self.mapping: JoinFieldMapping = JoinFieldMapping(
-            foreign_key=foreignkey, key=key
-        )
-        self.index: UniqueIndex = UniqueIndex(b, key)
+    def __init__(
+        self,
+        a: Iterable,
+        b: Iterable,
+        mapping: JoinFieldMapping,
+        through: JoinFactory = None
+    ):
+        self.mapping: JoinFieldMapping = mapping
+        self.index: UniqueIndex = UniqueIndex(b, mapping.key)
         cond: JoinCondition = lambda a, b: True
         super().__init__(a, b, cond=cond, through=through)
 
@@ -111,13 +154,15 @@ class ForeignKeyMappingPairing(ConditionalPairing):
 
 
 class ReferencedKeyMappingPairing(ElementToSubsetPairing):
-    def __init__(self, a: Iterable, b: Iterable, mapping: Dict[str, str], through: JoinFactory = None):
-        # ex: mapping = {"id":"product_id"}
-        key, foreignkey = mapping.items()[0]
-        self.mapping: JoinFieldMapping = JoinFieldMapping(
-            foreign_key=foreignkey, key=key
-        )
-        self.index: Index = UniqueIndex(b, foreignkey)
+    def __init__(
+        self,
+        a: Iterable,
+        b: Iterable,
+        mapping: JoinFieldMapping,
+        through: JoinFactory = None
+    ):
+        self.mapping: JoinFieldMapping = mapping
+        self.index: Index = UniqueIndex(b, mapping.foreign_key)
         cond: JoinCondition = lambda a, b: True
         super().__init__(a, b, cond=cond, through=through)
 

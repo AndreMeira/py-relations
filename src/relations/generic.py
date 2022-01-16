@@ -40,6 +40,7 @@ class GenericParentingRelation:
             self.generate_children_of(parent)
         )
 
+
 class GenericHasOne(GenericParentingRelation):
 
     def join(self):
