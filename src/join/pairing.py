@@ -1,10 +1,14 @@
 from collections import namedtuple
-from typing import Iterable, Callable, Any, List
+from typing import Iterable, Callable, Any, List, Dict
+
+from relations.src.collection.index import UniqueIndex, Index
 
 JoinedPair = namedtuple('JoinedPaired', ['a', 'b'])
 JoinedElementToSubset = namedtuple('JoinedElementToSubset', ['element', 'subset'])
+JoinFieldMapping = namedtuple('JoinFieldMapping', ['foreign_key', 'key'])
 JoinFactory = Callable[[Any, Any], Any]
 JoinCondition = Callable[[Any, Any], bool]
+
 
 
 class ConditionalPairing:
@@ -63,7 +67,7 @@ class UnrestrictedPairing(ConditionalPairing):
 
 class ElementToSubsetPairing(ConditionalPairing):
     JOIN_THROUGH = JoinedElementToSubset
-    
+
     def join(self) -> Iterable[JoinedPair, Any]:
         return self.iterate()
 
@@ -78,3 +82,46 @@ class ElementToSubsetPairing(ConditionalPairing):
             b for b in self.b
             if self.condition(element, b)
         ]
+
+
+class ForeignKeyMappingPairing(ConditionalPairing):
+
+    def __init__(self, a: Iterable, b: Iterable, mapping: Dict[str, str], through: JoinFactory = None):
+        # ex: mapping = {"product_id":"id"}
+        foreignkey, key = mapping.items()[0]
+        self.mapping: JoinFieldMapping = JoinFieldMapping(
+            foreign_key=foreignkey, key=key
+        )
+        self.index: UniqueIndex = UniqueIndex(b, key)
+        cond: JoinCondition = lambda a, b: True
+        super().__init__(a, b, cond=cond, through=through)
+
+    def find_pair(self, el):
+        try:
+            key = getattr(el, self.mapping.foreign_key)
+            self.index.find(key)
+        except KeyError:
+            return None
+
+    def iterate(self) -> List:
+        return [
+            self.through(el, self.find_pair(el))
+            for el in self.a
+        ]
+
+
+class ReferencedKeyMappingPairing(ElementToSubsetPairing):
+    def __init__(self, a: Iterable, b: Iterable, mapping: Dict[str, str], through: JoinFactory = None):
+        # ex: mapping = {"id":"product_id"}
+        key, foreignkey = mapping.items()[0]
+        self.mapping: JoinFieldMapping = JoinFieldMapping(
+            foreign_key=foreignkey, key=key
+        )
+        self.index: Index = UniqueIndex(b, foreignkey)
+        cond: JoinCondition = lambda a, b: True
+        super().__init__(a, b, cond=cond, through=through)
+
+    def subset_of(self, element):
+        return self.index.find(
+            getattr(element, self.mapping.key)
+        )
