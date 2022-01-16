@@ -9,6 +9,10 @@ JoinedPair = namedtuple('JoinedPaired', ['a', 'b'])
 JoinFieldMapping = namedtuple('JoinFieldMapping', ['foreign_key', 'key'])
 JoinedElementToSubset = namedtuple('JoinedElementToSubset', ['element', 'subset'])
 
+JoinFieldMapping.from_dict = lambda d: JoinFieldMapping(
+    foreign_key=d.keys()[0], key=d.values()[0]
+)
+
 
 def _fkmap(mapping: Dict[str, str]):
     foreignkey, key = mapping.items()[0]
@@ -162,11 +166,13 @@ class ReferencedKeyMappingPairing(ElementToSubsetPairing):
         through: JoinFactory = None
     ):
         self.mapping: JoinFieldMapping = mapping
-        self.index: Index = UniqueIndex(b, mapping.foreign_key)
+        self.index: Index = Index(b, mapping.key)
         cond: JoinCondition = lambda a, b: True
         super().__init__(a, b, cond=cond, through=through)
 
     def subset_of(self, element):
-        return self.index.find(
-            getattr(element, self.mapping.key)
-        )
+        try:
+            key = getattr(element, self.mapping.foreign_key)
+            return self.index.find(key)
+        except KeyError:
+            return []

@@ -22,8 +22,9 @@ class Index:
     def get_items(self):
         return self.items
 
-    def find(self, key):
-        return self.index.get(key)
+    def find(self, key, *args):
+        args = [key] + args
+        return self.index.get(*args)
 
     @staticmethod
     def make_key_getter(by: str = None, getter: IndexableGetter = None) -> IndexableGetter:
