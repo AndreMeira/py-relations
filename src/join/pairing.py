@@ -39,14 +39,17 @@ class ConditionalPairing:
 
 class ZipPairing(ConditionalPairing):
 
-    def __init__(self, Iterable, b: Iterable, through: JoinFactory = None):
-        super(ZipPairing, self).__init__(a, b, through, lambda a, b: True)
+    def __init__(self, a: Iterable, b: Iterable, through: JoinFactory = None):
+        super().__init__(a, b, through, lambda a, b: True)
 
     def iterate(self):
         b = [item for item in self.b]
+        a = [item for item in self.a]
+        maxlength = min(len(a), len(b))
+
         return [
             (item, b.index(index))
-            for index, item in enumerate(self.a)
+            for index, item in enumerate(self.a[0:maxlength])
         ]
 
 
