@@ -22,7 +22,7 @@ class ConditionalPairing:
             or (lambda a, b: JoinedPair(a, b))
 
         self.condition: JoinCondition = cond\
-            or (lambda a, b: JoinedPair(a, b))
+            or (lambda a, b: True)
 
     def iterate(self):
         return [(a, b) for a in self.a for b in self.b]
@@ -35,6 +35,19 @@ class ConditionalPairing:
                 if self.condition(a, b)
             ]
         return self._result
+
+
+class ZipPairing(ConditionalPairing):
+
+    def __init__(self, Iterable, b: Iterable, through: JoinFactory = None):
+        super(ZipPairing, self).__init__(a, b, through, lambda a, b: True)
+
+    def iterate(self):
+        b = [item for item in self.b]
+        return [
+            (item, b.index(index))
+            for index, item in enumerate(self.a)
+        ]
 
 
 class UnrestrictedPairing(ConditionalPairing):
