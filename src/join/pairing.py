@@ -144,11 +144,8 @@ class ForeignKeyMappingPairing(ConditionalPairing):
         super().__init__(a, b, cond=cond, through=through)
 
     def find_pair(self, el):
-        try:
-            key = getattr(el, self.mapping.foreign_key)
-            self.index.find(key)
-        except KeyError:
-            return None
+        key = getattr(el, self.mapping.foreign_key)
+        self.index.find(key, None)
 
     def iterate(self) -> List:
         return [
@@ -171,8 +168,5 @@ class ReferencedKeyMappingPairing(ElementToSubsetPairing):
         super().__init__(a, b, cond=cond, through=through)
 
     def subset_of(self, element):
-        try:
-            key = getattr(element, self.mapping.foreign_key)
-            return self.index.find(key)
-        except KeyError:
-            return []
+        key = getattr(element, self.mapping.foreign_key)
+        return self.index.find(key, [])
