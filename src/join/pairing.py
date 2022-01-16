@@ -37,9 +37,11 @@ class ConditionalPairing:
         self.a: Iterable = a
         self.b: Iterable = b
         self.through: JoinFactory = through\
+            or getattr(self, 'through', None)\
             or (lambda a, b: self.JOIN_THROUGH(a, b))
 
         self.condition: JoinCondition = cond\
+            or getattr(self, 'condition', None)\
             or (lambda a, b: True)
 
     def iterate(self) -> List:
