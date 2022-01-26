@@ -1,19 +1,19 @@
 from collections import defaultdict
-from typing import Iterable, List, Any, Dict, Callable, Union
+from typing import Iterable, List, Any, Dict, Callable, Union, Generic, TypeVar, Hashable
 
-IndexableGetter = Callable[[Any]: Any]
+T = TypeVar('T')
+IndexableGetter = Callable[[Any], Hashable]
 
 
-# @todo use Gerenic[T] for typing
-class Index:
+class Index(Generic[T]):
 
-    def __init__(self, items: Iterable, by: str = None, getter: IndexableGetter = None):
-        self.items: Iterable[Any] = items
-        self.key_getter: IndexableGetter = Index.make_key_getter(by, getter)
-        self.map: Dict[Any, Any] = self.index()
+    def __init__(self, items: Iterable, index_by: Union[str, IndexableGetter]):
+        self.items: Iterable[T] = items
+        self.key_getter: IndexableGetter = Index.make_key_getter(index_by)
+        self.map: Dict[Hashable, T] = self.index()
         self.index()
 
-    def index(self) -> Dict[Any, Any]:
+    def index(self) -> Dict[Hashable, T]:
         mapping = defaultdict(list)
         for item in self.items:
             mapping.get(self.key_getter(item)).append(item)
@@ -23,20 +23,20 @@ class Index:
         return self.items
 
     def find(self, key, *args):
-        args = [key] + args
-        return self.index.get(*args)
+        args = [key] + list(args)
+        return self.map.get(*args)
 
     @staticmethod
-    def make_key_getter(by: str = None, getter: IndexableGetter = None) -> IndexableGetter:
-        if getter is not None:
-            return getter
+    def make_key_getter(index_by: Union[str, IndexableGetter]) -> IndexableGetter:
+        if isinstance(index_by, Callable):
+            return index_by
 
-        if by is not None:
-            return lambda item: getattr(item, by)
+        if isinstance(index_by, str):
+            return lambda item: getattr(item, index_by)
 
 
-class UniqueIndex(Index):
-    def index(self) -> Dict[Any, Any]:
+class UniqueIndex(Index, Generic[T]):
+    def index(self) -> Dict[Hashable, T]:
         return {
             self.key_getter(item): item
             for item in self.get_items()
@@ -49,32 +49,32 @@ class ObjectIndices:
         self.items: Iterable[Any] = items
         self.indices: Dict[str, Index] = {}
 
-        for uniq in unique:
+        for unique_field in unique:
             # the name of the index will be the name of the attribute
-            self.unique_index(uniq, by=uniq)
+            self.create_unique_index(unique_field, index_by=unique_field)
 
-        for index in indices:
+        for field in indices:
             # the name of the index will be the name of the attribute
-            self.index(index, by=index)
+            self.create_index(field, index_by=field)
 
-    def create_unique_index(self, name: str, by: str = None, getter: IndexableGetter = None):
+    def create_unique_index(self, name: str, index_by: Union[str, IndexableGetter]):
         self.add_index(name, UniqueIndex(
-            self.items, by=by, getter=getter
+            self.items, index_by=index_by
         ))
 
-    def create_index(self, name: str, by: str = None, getter: IndexableGetter = None):
+    def create_index(self, name: str, index_by: Union[str, IndexableGetter]):
         self.add_index(name, Index(
-            self.items, by=by, getter=getter
+            self.items, index_by=index_by
         ))
 
-    def add_index(self, name:str, index: Index):
+    def add_index(self, name: str, index: Index):
         self.indices[name] = index
 
     def get_index(self, name: str) -> Index:
         return self.indices.get(name)
 
     def find(self, index_name: str, key: Any) -> Union[Any, List[Any]]:
-        index: Index = self.index(index_name)
+        index: Index = self.indices.get(index_name)
         return index.find(key)
 
 
@@ -83,16 +83,17 @@ class DictIndices(ObjectIndices):
     def __init__(self, items: Iterable[Dict], unique: List[str] = None, indices: List[str] = None):
         super().__init__(items, unique, indices)
 
-    def create_index(self, name: str, by: str = None, getter: IndexableGetter = None):
-        getter = DictIndices.make_index_getter(by, getter)
-        super().create_index(name, getter=getter)
+    def create_index(self, name: str, index_by: Union[str, IndexableGetter]):
+        getter = DictIndices.make_index_getter(index_by)
+        super().create_index(name, index_by=getter)
 
-    def create_unique_index(self, name: str, by: str = None, getter: IndexableGetter = None):
-        getter = DictIndices.make_index_getter(by, getter)
-        super().create_unique_index(name, getter=getter)
+    def create_unique_index(self, name: str, index_by: Union[str, IndexableGetter]):
+        getter = DictIndices.make_index_getter(index_by)
+        super().create_unique_index(name, index_by=getter)
 
     @staticmethod
-    def make_index_getter(by: str = None, getter: IndexableGetter = None) -> IndexableGetter:
-        if by is not None:
-            return lambda item: item.get(by)
-        return Index.make_key_getter(by, getter)
+    def make_index_getter(index_by: Union[str, IndexableGetter]) -> IndexableGetter:
+        if isinstance(index_by, str):
+            return lambda item: item.get(index_by)
+
+        return Index.make_key_getter(index_by)

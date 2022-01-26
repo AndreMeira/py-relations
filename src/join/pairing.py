@@ -1,7 +1,7 @@
 from collections import namedtuple
 from typing import Iterable, Callable, Any, List, Dict, Union
 
-from relations.src.collection.index import UniqueIndex, Index
+from ..collection.index import UniqueIndex, Index
 
 JoinFactory = Callable[[Any, Any], Any]
 JoinCondition = Callable[[Any, Any], bool]
@@ -9,6 +9,7 @@ JoinedPair = namedtuple('JoinedPaired', ['a', 'b'])
 JoinFieldMapping = namedtuple('JoinFieldMapping', ['foreign_key', 'key'])
 JoinedElementToSubset = namedtuple('JoinedElementToSubset', ['element', 'subset'])
 
+# @todo class NamedTuple
 JoinFieldMapping.from_dict = lambda d: JoinFieldMapping(
     foreign_key=d.keys()[0], key=d.values()[0]
 )
